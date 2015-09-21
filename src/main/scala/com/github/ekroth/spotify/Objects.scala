@@ -2,11 +2,6 @@ package com.github.ekroth.spotify
 
 /** Objects corresponding to Spotify's object model.
   *
-  * All classes were initially scraped using a HTML scraper
-  * written specifically for Spotify. This however, turned out
-  * to be filled with errors (and inconsistency on Spotify's page).
-  * The scraper can be found on the 'scraper' branch.
-  *
   * Since this trait contains classes, it should only be
   * extended by the package object.
   */
