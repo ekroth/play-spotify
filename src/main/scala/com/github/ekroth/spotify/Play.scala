@@ -29,11 +29,9 @@ trait PlayCommands {
 
     request.session.get("auth_code").map { authCode =>
       getUser(authCode).map { userOpt =>
-        userOpt.map { block }.getOrElse { fallback }
+        userOpt.map(block).getOrElse(fallback)
       }
-    }.getOrElse {
-      Future.successful(fallback)
-    }
+    }.getOrElse(Future.successful(fallback))
   }
 
   def withUserEitherAsync[T](fallback: => Result)(block: UserAuth => Future[Either[Result, T]])(implicit
@@ -44,11 +42,9 @@ trait PlayCommands {
 
     request.session.get("auth_code").map { authCode =>
       getUser(authCode).flatMap { userOpt =>
-        userOpt.map { block }.getOrElse { Future.successful(Left(fallback)) }
+        userOpt.map(block).getOrElse(Future.successful(Left(fallback)))
       }
-    }.getOrElse {
-      Future.successful(Left(fallback))
-    }
+    }.getOrElse(Future.successful(Left(fallback)))
   }
 
 
@@ -71,10 +67,8 @@ trait PlayCommands {
 
     request.session.get("auth_code").map { authCode =>
       getUser(authCode).flatMap { userOpt =>
-        userOpt.map { block }.getOrElse { Future.successful(fallback) }
+        userOpt.map(block).getOrElse(Future.successful(fallback))
       }
-    }.getOrElse {
-      Future.successful(fallback)
-    }
+    }.getOrElse(Future.successful(fallback))
   }
 }

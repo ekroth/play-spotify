@@ -59,7 +59,7 @@ trait Commands {
     s"&client_id=${srv.clientId}" +
     s"""&redirect_uri=${srv.redirectUri}"""
 
-    val withState = state.map { s => s"&state=$s" }.getOrElse("")
+    val withState = state.map(s => s"&state=$s").getOrElse("")
     val withScopes = if (scopes.isEmpty) "" else scopes.mkString("&scope=", " ", "")
 
     base + withState + withScopes
@@ -122,10 +122,7 @@ trait Commands {
             if resp.status == OK
           } yield user.copy(accessToken = accessToken, expires = (System.currentTimeMillis / 1000 + expiresIn))
 
-          refreshedUser.foreach { user =>
-            saveUser(user)
-          }
-
+          refreshedUser.foreach(saveUser)
           refreshedUser.asOpt
         }.recover {
           case x => {
@@ -163,10 +160,7 @@ trait Commands {
         if resp.status == OK
       } yield ClientAuth(accessToken, expiresIn)
 
-      client.foreach { client =>
-        saveClient(client)
-      }
-
+      client.foreach(saveClient)
       client.asOpt
     }.recover {
       case x => {
@@ -198,10 +192,7 @@ trait Commands {
         if resp.status == OK
       } yield UserAuth(authCode, accessToken, expiresIn, refreshToken)
 
-      user.foreach { user =>
-        saveUser(user)
-      }
-
+      user.foreach(saveUser)
       user.asOpt
     }.recover {
       case x => {
