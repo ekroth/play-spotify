@@ -40,14 +40,12 @@ trait Extensions {
     def allPages(user: UserAuth)(implicit app: Application, ec: ExecutionContext): Enumerator[Paging[T]] =
       Enumerator(underlying) >>> Enumerator.unfoldM(underlying) { page =>
         page.nextPage(user).map { nextOpt =>
-          nextOpt.map { next =>
-            (next, next)
-          }
+          nextOpt.map(next => (next, next))
         }
       }
 
     /** Current and all remaining items. */
     def allItems(user: UserAuth)(implicit app: Application, ec: ExecutionContext): Future[Seq[T]] =
-      allPages(user).through(Enumeratee.map { _.items }).run(Iteratee.consume[Seq[T]]())
+      allPages(user).through(Enumeratee.map(_.items)).run(Iteratee.consume[Seq[T]]())
   }
 }
