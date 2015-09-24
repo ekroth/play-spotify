@@ -19,6 +19,9 @@ trait Commands {
   import play.api.libs.ws._
   import play.api.libs.json._
 
+  val spotifyMaxOffset = Int.MaxValue
+  val spotifyMaxLimit = 50
+
   /** Scopes for user access. */
   object Scopes {
     val playlistReadPrivate: Scope = "playlist-read-private"
@@ -59,7 +62,7 @@ trait Commands {
     * @param state Optional state variable.
     * @param scopes Scopes.
     */
-  def redirectUri(state: Option[String], scopes: Scope*)(implicit srv: Credentials) = {
+  def redirectUri(state: Option[String], scopes: Scope*)(implicit srv: Credentials): String = {
     val base = "https://accounts.spotify.com/authorize" +
     "?response_type=code" +
     s"&client_id=${srv.clientId}" +
@@ -99,9 +102,10 @@ trait Commands {
     wsOptUrl[UserPrivate](s"https://api.spotify.com/v1/me", user)
 
   /** Get the current user's liked tracks. */
-  def currentUserTracks(user: UserAuth, offset: Int = 0, limit: Int = 50)(implicit app: Application, ec: ExecutionContext): Future[Option[Paging[SavedTrack]]] = {
-    requireBounds(0, limit, 50, "limit")
-    requireBounds(0, offset, Int.MaxValue, "offset")
+  def currentUserTracks(user: UserAuth, offset: Int = 0, limit: Int = spotifyMaxLimit)
+    (implicit app: Application, ec: ExecutionContext): Future[Option[Paging[SavedTrack]]] = {
+    requireBounds(0, offset, spotifyMaxOffset, "offset")
+    requireBounds(0, limit, spotifyMaxLimit, "limit")
     wsOptUrl[Paging[SavedTrack]](s"https://api.spotify.com/v1/me/tracks?offset=$offset&limit=$limit", user)
   }
 
@@ -146,7 +150,7 @@ trait Commands {
     *
     * This doesn't exists, and is equal to `clientAuth`.
     */
-  def clientRefresh(implicit app: Application, ec: ExecutionContext, srv: Credentials) = clientAuth
+  def clientRefresh(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = clientAuth
 
   /** Authorize the client.
     *
