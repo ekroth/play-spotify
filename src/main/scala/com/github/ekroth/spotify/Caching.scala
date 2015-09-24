@@ -17,24 +17,24 @@ trait Caching {
 }
 
 trait NoCaching extends Caching {
-  def saveUser(user: UserAuth) = ()
+  override def saveUser(user: UserAuth) = ()
 
-  def loadUser(oauth: String) = None
+  override def loadUser(oauth: String) = None
 
-  def saveClient(client: ClientAuth) = ()
+  override def saveClient(client: ClientAuth) = ()
 
-  def loadClient() = None
+  override def loadClient() = None
 }
 
 trait PlayCacheCaching extends Caching {
   import play.api.Play.current
   import play.api.cache._
 
-  def saveUser(user: UserAuth) = Cache.set(user.oauth, user)
+  override def saveUser(user: UserAuth) = Cache.set(user.oauth, user)
 
-  def loadUser(oauth: String) = Cache.getAs[UserAuth](oauth)
+  override def loadUser(oauth: String) = Cache.getAs[UserAuth](oauth)
 
-  def saveClient(client: ClientAuth) = ()
+  override def saveClient(client: ClientAuth) = ()
 
-  def loadClient() = None
+  override def loadClient() = None
 }
