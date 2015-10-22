@@ -110,38 +110,37 @@ trait Commands {
   }
 
   /** Get the current user's private profile. */
-  def currentUserProfile(user: UserAuth)(implicit app: Application, ec: ExecutionContext): Future[Option[UserPrivate]] =
+  def currentUserProfile(user: UserAuth)(implicit app: Application, ec: ExecutionContext): ResultF[UserPrivate] =
     wsOptUrl[UserPrivate](s"https://api.spotify.com/v1/me", user, None)
 
   /** Get the current user's liked tracks. */
   def currentUserTracks(user: UserAuth, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[SavedTrack]]] = {
+    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[SavedTrack]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
     wsOptUrl[Paging[SavedTrack]](s"https://api.spotify.com/v1/me/tracks?limit=$limit", user, None)
-      .map(_.map(_.withExt()))
+      .map(_.withExt())
   }
 
   def currentUserFollowedArtists(user: UserAuth, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[ArtistFull]]] = {
+    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
     wsOptUrl[Paging[ArtistFull]](s"https://api.spotify.com/v1/me/following?type=artist&limit=$limit", user, Some("artists"))
-      .map(_.map(_.withExt(Some("artists"))))
+      .map(_.withExt(Some("artists")))
   }
 
   def currentUserIsFollowing(user: UserAuth, ids: Seq[String])
-    (implicit app: Application, ec: ExecutionContext): Future[Seq[(String, Boolean)]] = {
+    (implicit app: Application, ec: ExecutionContext): ResultF[Seq[(String, Boolean)]] = {
     requireBounds(1, ids.size, spotifyMaxLimit, "ids")
 
     wsOptUrl[Seq[Boolean]](s"""https://api.spotify.com/v1/me/following/contains?type=artist&ids=${ids.mkString(",")}""", user, None)
-      .map(_.getOrElse(Seq.empty))
       .map(x => ids.zip(x))
   }
 
   def searchArtist(client: ClientAuth, query: String, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[ArtistFull]]] = {
+    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
     wsOptUrl[Paging[ArtistFull]](s"""https://api.spotify.com/v1/search?type=artist&q=${encodeSpaces(query)}""", client, Some("artists"))
-      .map(_.map(_.withExt(Some("artists"))))
+      .map(_.withExt(Some("artists")))
   }
 
   /** Refresh user token.
