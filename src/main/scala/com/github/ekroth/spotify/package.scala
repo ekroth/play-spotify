@@ -52,8 +52,8 @@ package object spotify extends Objects {
     def unfold[T](start: => T)(op: T => Future[Option[T]])(implicit ec: ExecutionContext): Future[Seq[T]] =
       op(start).flatMap { pageOpt =>
         pageOpt match {
-          case Some(x) => unfold(x)(op).map(y => Seq(x) ++ y)
-          case None => Future.successful(Seq.empty)
+          case Some(x) => unfold(x)(op).map(y => Seq(start) ++ y)
+          case None => Future.successful(Seq(start))
         }
       }
   }
