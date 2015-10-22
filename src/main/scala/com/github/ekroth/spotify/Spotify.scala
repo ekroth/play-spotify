@@ -6,6 +6,13 @@
 
 package com.github.ekroth.spotify
 
-trait Spotify extends PlayCommands with Commands with Extensions {
+trait Spotify {
   self: Caching =>
+
+  val SpotifyAPI: PlayCommands with Commands with Extensions = new PlayCommands with Commands with Extensions with Caching {
+    def saveUser(user: UserAuth): Unit = self.saveUser(user)
+    def loadUser(oauth: String): Option[UserAuth] = self.loadUser(oauth)
+    def saveClient(client: ClientAuth): Unit = self.saveClient(client)
+    def loadClient(): Option[ClientAuth] = self.loadClient()
+  }
 }
