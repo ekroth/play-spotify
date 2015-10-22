@@ -8,6 +8,8 @@ package com.github.ekroth
 
 package object spotify extends Objects {
 
+  import scala.collection.immutable.Seq
+
   /* Auth */
   sealed trait Token {
     def expires: Long
@@ -28,7 +30,9 @@ package object spotify extends Objects {
     case class Permission(reason: String) extends Error
     case class Json(error: play.api.libs.json.JsError, reason: String = "") extends Error
     case class Impl(reason: String) extends Error
-    case class Usage(error: ErrorMessage) extends Error
+    case class Usage(error: ErrorMessage) extends Error {
+      override def reason = error.toString
+    }
   }
 
   /** Bounds requirement.
@@ -38,5 +42,18 @@ package object spotify extends Objects {
   final def requireBounds[T : Ordering](lower: T, actual: T, upper: T, msg: String): Unit = {
     val ord = implicitly[Ordering[T]]
     require(ord.lteq(actual, upper) && ord.gteq(actual, lower), s"'$msg' variable require bounds [$lower, $upper], actual $actual")
+  }
+
+  import scala.concurrent.{ ExecutionContext, Future }
+
+  final implicit class RichFuture(val underlying: Future.type) {
+
+    def unfold[T](start: => T)(op: T => Future[Option[T]])(implicit ec: ExecutionContext): Future[Seq[T]] =
+      op(start).flatMap { pageOpt =>
+        pageOpt match {
+          case Some(x) => unfold(x)(op).map(y => Seq(x) ++ y)
+          case None => Future.successful(Seq.empty)
+        }
+      }
   }
 }
