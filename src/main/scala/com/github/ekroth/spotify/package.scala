@@ -46,7 +46,7 @@ package object spotify extends Objects {
 
   import scala.concurrent.{ ExecutionContext, Future }
 
-  final implicit class RichFuture(val underlying: Future.type) {
+  final implicit class RichFuture(val underlying: Future.type) extends AnyVal {
 
     def unfold[T](start: => T)(op: T => Future[Option[T]])(implicit ec: ExecutionContext): Future[Seq[T]] =
       op(start).flatMap { pageOpt =>
