@@ -11,8 +11,8 @@ package object spotify extends Objects {
   /* Auth */
   sealed trait Token {
     def expires: Long
-
     val margin: Int = 100
+    def accessToken: String
     def expiresIn: Int = (expires - System.currentTimeMillis / 1000).asInstanceOf[Int]
     def isExpired: Boolean = System.currentTimeMillis / 1000 >= expires
   }
