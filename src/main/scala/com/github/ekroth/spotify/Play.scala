@@ -9,6 +9,7 @@ package com.github.ekroth.spotify
 trait PlayCommands {
   self: Commands =>
 
+  import scala.collection.immutable.Seq
   import scala.concurrent.{ Future, ExecutionContext }
 
   import play.api._
@@ -76,5 +77,24 @@ trait PlayCommands {
         userOpt.map(block).getOrElse(Future.successful(fallback))
       }
     }.getOrElse(Future.successful(fallback))
+  }
+
+  /** Supply `block` with client.
+    *
+    * `unathorized` is returned if `spotify.Commands.getClient` fails.
+    * `redirect` is returned if session is missing auth code.
+    * Otherwise the return value of parameter `block` is returned.
+    *
+    * @see `withUser` for use without `Future`.
+    */
+  def withClientAsync(fallback: => Result)(block: ClientAuth => Future[Result])(implicit
+    app: Application,
+    ec: ExecutionContext,
+    srv: Credentials,
+    request: Request[AnyContent]): Future[Result] = {
+
+    getClient.flatMap { clientOpt =>
+      clientOpt.map(block).getOrElse(Future.successful(fallback))
+    }
   }
 }
