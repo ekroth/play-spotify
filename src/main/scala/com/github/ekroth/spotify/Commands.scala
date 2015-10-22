@@ -8,8 +8,9 @@ package com.github.ekroth.spotify
 
 /** Commands corresponding to the Spotify Web API v1. */
 trait Commands {
-  self: Caching =>
+  self: Caching with Extensions =>
 
+  import scala.collection.immutable.Seq
   import scala.concurrent.Future
   import scala.concurrent.ExecutionContext
 
@@ -74,20 +75,25 @@ trait Commands {
     base + withState + withScopes
   }
 
-  private[spotify] def wsOptUrl[T : Reads](url: String, user: UserAuth)(implicit app: Application, ec: ExecutionContext): Future[Option[T]] =
-    WS.url(url)
-      .withHeaders("Authorization" -> s"Bearer ${user.accessToken}").get().map { resp =>
+  private[spotify] def encodeSpaces(x: String) = x.replace(" ", "%20")
+
+  private[spotify] def wsOptUrl[T : Reads](url: String, token: Token, inner: Option[String])
+    (implicit app: Application, ec: ExecutionContext): Future[Option[T]] = WS.url(url)
+      .withHeaders("Authorization" -> s"Bearer ${token.accessToken}").get().map { resp =>
+//      logger.trace(s"ws: $url inner: $inner")
       if (resp.status == OK) {
-        logger.trace(s"""'$url' ok: '${resp.json}'""")
-        resp.json.validate[T] match {
+//        logger.trace(s"""'$url' ok: '${resp.json}'""")
+        inner.map(x => resp.json \ x).getOrElse(resp.json).validate[T] match {
           case JsError(errs) => {
             logger.error(s"""'$url' json errors: '$errs'""")
+            logger.error(s"""for resp ${resp.json}""")
             None
           }
           case JsSuccess(res, _) => Some(res)
         }
       } else {
-        logger.debug(s"""'$url' fail: '$resp'""")
+//        logger.debug(s"""'$url' failz: '$resp'""")
+//        logger.debug(s"""whence: ${resp.body}, ${resp.status}""")
         None
       }
     }.recover {
@@ -99,14 +105,37 @@ trait Commands {
 
   /** Get the current user's private profile. */
   def currentUserProfile(user: UserAuth)(implicit app: Application, ec: ExecutionContext): Future[Option[UserPrivate]] =
-    wsOptUrl[UserPrivate](s"https://api.spotify.com/v1/me", user)
+    wsOptUrl[UserPrivate](s"https://api.spotify.com/v1/me", user, None)
 
   /** Get the current user's liked tracks. */
-  def currentUserTracks(user: UserAuth, offset: Int = 0, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): Future[Option[Paging[SavedTrack]]] = {
-    requireBounds(0, offset, spotifyMaxOffset, "offset")
-    requireBounds(0, limit, spotifyMaxLimit, "limit")
-    wsOptUrl[Paging[SavedTrack]](s"https://api.spotify.com/v1/me/tracks?offset=$offset&limit=$limit", user)
+  def currentUserTracks(user: UserAuth, limit: Int = spotifyMaxLimit)
+    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[SavedTrack]]] = {
+    requireBounds(1, limit, spotifyMaxLimit, "limit")
+    wsOptUrl[Paging[SavedTrack]](s"https://api.spotify.com/v1/me/tracks?limit=$limit", user, None)
+      .map(_.map(_.withExt()))
+  }
+
+  def currentUserFollowedArtists(user: UserAuth, limit: Int = spotifyMaxLimit)
+    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[ArtistFull]]] = {
+    requireBounds(1, limit, spotifyMaxLimit, "limit")
+    wsOptUrl[Paging[ArtistFull]](s"https://api.spotify.com/v1/me/following?type=artist&limit=$limit", user, Some("artists"))
+      .map(_.map(_.withExt(Some("artists"))))
+  }
+
+  def currentUserIsFollowing(user: UserAuth, ids: Seq[String])
+    (implicit app: Application, ec: ExecutionContext): Future[Seq[(String, Boolean)]] = {
+    requireBounds(1, ids.size, spotifyMaxLimit, "ids")
+
+    wsOptUrl[Seq[Boolean]](s"""https://api.spotify.com/v1/me/following/contains?type=artist&ids=${ids.mkString(",")}""", user, None)
+      .map(_.getOrElse(Seq.empty))
+      .map(x => ids.zip(x))
+  }
+
+  def searchArtist(client: ClientAuth, query: String, limit: Int = spotifyMaxLimit)
+    (implicit app: Application, ec: ExecutionContext): Future[Option[Pager[ArtistFull]]] = {
+    requireBounds(1, limit, spotifyMaxLimit, "limit")
+    wsOptUrl[Paging[ArtistFull]](s"""https://api.spotify.com/v1/search?type=artist&q=${encodeSpaces(query)}""", client, Some("artists"))
+      .map(_.map(_.withExt(Some("artists"))))
   }
 
   /** Refresh user token.
@@ -217,7 +246,7 @@ trait Commands {
     loadClient() match {
       case Some(client) if client.isExpired => clientRefresh
       case client: Some[_] => Future.successful(client)
-      case None => Future.successful(None)
+      case None => clientAuth
     }
   }
 
