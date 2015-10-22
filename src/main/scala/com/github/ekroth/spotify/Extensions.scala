@@ -4,7 +4,8 @@
  * http://opensource.org/licenses/MIT
  */
 
-package com.github.ekroth.spotify
+package com.github.ekroth
+package spotify
 
 trait Extensions {
   self: Commands =>
@@ -12,9 +13,16 @@ trait Extensions {
   import scala.collection.immutable.Seq
   import scala.concurrent._
 
+  import scalaz._
+  import Scalaz._
+  import scalaz.contrib._
+  import scalaz.contrib.std._
+
   import play.api.Application
   import play.api.libs.json._
   import play.api.libs.iteratee._
+
+  import errorhandling._
 
   class Pager[T : Reads](val inner: Option[String], private val underlying: Paging[T]) {
 
@@ -33,35 +41,46 @@ trait Extensions {
     def isLastPage: Boolean = underlying.next.isEmpty
 
     /** Previous underlying object. */
-    def previousPage(token: Token)(implicit app: Application, ec: ExecutionContext): Future[Option[Pager[T]]] =
+    def previousPage(token: Token)(implicit app: Application, ec: ExecutionContext): ResultF[Option[Pager[T]]] =
       previousMeUrl match {
-        case Some(url) => wsOptUrl[Paging[T]](url, token, inner).map(_.map(_.withExt(inner)))
-        case None => Future.successful(None)
+        case Some(url) => wsOptUrl[Paging[T]](url, token, inner).map(x => Some(x.withExt(inner)))
+        case None => Result.okF(Future.successful(None.right))
       }
 
     /** Next underlying object. */
-    def nextPage(token: Token)(implicit app: Application, ec: ExecutionContext): Future[Option[Pager[T]]] =
+    def nextPage(token: Token)(implicit app: Application, ec: ExecutionContext): ResultF[Option[Pager[T]]] =
       nextMeUrl match {
-        case Some(url) => wsOptUrl[Paging[T]](url, token, inner).map(_.map(_.withExt(inner)))
-        case None => Future.successful(None)
+        case Some(url) => wsOptUrl[Paging[T]](url, token, inner).map(x => Some(x.withExt(inner)))
+        case None => Result.okF(Future.successful(None.right))
       }
 
-    /** This and the other pages.
-      *
-      * The enumerator will end at the last page or on auth/connection error.
-      * The user can check if the last page is actually the last by checking
-      * page.lastPage.
-      */
-    def allPages(token: Token)(implicit app: Application, ec: ExecutionContext): Enumerator[Pager[T]] =
-      Enumerator(this) >>> Enumerator.unfoldM(this) { page =>
-        page.nextPage(token).map { nextOpt =>
-          nextOpt.map(next => (next, next))
+
+    /* Retrieve this and all remaining pages. */
+    def allPages(token: Token)(implicit app: Application, ec: ExecutionContext): Future[Seq[Result[Pager[T]]]] = {
+      Future.unfold(Result.ok(this)) { pageResult =>
+        pageResult match {
+          case \/-(pager) if pager.isLastPage => Future.successful(None)
+          case \/-(pager) => pager.nextPage(token).run.map { pageResult2 =>
+            pageResult2 match {
+              case \/-(x) => x.map(_.right)
+              case -\/(_) => None
+            }
+          }
+          case -\/(_) => Future.successful(None)
         }
       }
+    }
 
-    /** Current and all remaining items. */
-    def allItems(token: Token)(implicit app: Application, ec: ExecutionContext): Future[Seq[T]] =
-      allPages(token).through(Enumeratee.map(_.underlying.items)).run(Iteratee.consume[Seq[T]]())
+    /* Retrieve this page's items and all remaining items. */
+    def allItems(token: Token)(implicit app: Application, ec: ExecutionContext): ResultF[Seq[T]] = Result.okF {
+      val pages = allPages(token).map(Result.sequence(_))
+      pages.map { pageResult =>
+        pageResult.map { page =>
+          page.flatMap(_.underlying.items)
+        }
+      }
+    }
+
   }
 
   implicit final class RichPaging[T : Reads](private val underlying: Paging[T]) {
