@@ -59,7 +59,6 @@ trait Extensions {
     def allPages(token: Token)(implicit app: Application, ec: ExecutionContext): Future[Seq[Result[Pager[T]]]] = {
       Future.unfold(Result.ok(this)) { pageResult =>
         pageResult match {
-          case \/-(pager) if pager.isLastPage => Future.successful(None)
           case \/-(pager) => pager.nextPage(token).run.map { pageResult2 =>
             pageResult2 match {
               case \/-(x) => x.map(_.right)
