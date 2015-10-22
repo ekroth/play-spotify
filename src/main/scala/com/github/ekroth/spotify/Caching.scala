@@ -34,7 +34,7 @@ trait PlayCacheCaching extends Caching {
 
   override def loadUser(oauth: String) = Cache.getAs[UserAuth](oauth)
 
-  override def saveClient(client: ClientAuth) = ()
+  override def saveClient(client: ClientAuth) = Cache.set("client", client)
 
-  override def loadClient() = None
+  override def loadClient() = Cache.getAs[ClientAuth]("client")
 }
