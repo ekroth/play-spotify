@@ -180,11 +180,11 @@ private[spotify] trait Objects {
   }
   case class Category(href: String, icons: Seq[Image], id: String, name: String)
 
-  object Error {
-    implicit val ErrorWrites = Json.writes[Error].transform(TypeNameFix.afterWrite)
-    implicit val ErrorReads = Json.reads[Error].compose(TypeNameFix.beforeRead)
+  object ErrorMessage {
+    implicit val ErrorMessageWrites = Json.writes[ErrorMessage].transform(TypeNameFix.afterWrite)
+    implicit val ErrorMessageReads = Json.reads[ErrorMessage].compose(TypeNameFix.beforeRead)
   }
-  case class Error(status: Int, message: String)
+  case class ErrorMessage(status: Int, message: String)
 
   object PlaylistFull {
     implicit val PlaylistFullWrites = Json.writes[PlaylistFull].transform(TypeNameFix.afterWrite)

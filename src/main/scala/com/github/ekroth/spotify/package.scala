@@ -22,6 +22,15 @@ package object spotify extends Objects {
   case class ClientAuth(accessToken: AccessToken, expires: Long) extends Token
   case class UserAuth(oauth: String, accessToken: AccessToken, expires: Long, refreshToken: String) extends Token
 
+  import errorhandling._
+
+  object SpotifyError {
+    case class Permission(reason: String) extends Error
+    case class Json(error: play.api.libs.json.JsError, reason: String = "") extends Error
+    case class Impl(reason: String) extends Error
+    case class Usage(error: ErrorMessage) extends Error
+  }
+
   /** Bounds requirement.
     *
     * Requires `lower` <= `actual` <= `upper`.
