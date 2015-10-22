@@ -33,17 +33,17 @@ trait Commands {
 
   /** Scopes for user access. */
   object Scopes {
-    val playlistReadPrivate: Scope = "playlist-read-private"
-    val playlistModifyPublic: Scope = "playlist-modify-public"
+    val playlistReadPrivate:   Scope = "playlist-read-private"
+    val playlistModifyPublic:  Scope = "playlist-modify-public"
     val playlistModifyPrivate: Scope = "playlist-modify-private"
-    val streaming: Scope = "streaming"
-    val userFollowModify: Scope = "user-follow-modify"
-    val userFollowRead: Scope = "user-follow-read"
-    val userLibraryRead: Scope = "user-library-read"
-    val userLibraryModify: Scope = "user-library-modify"
-    val userReadPrivate: Scope = "user-read-private"
-    val userReadBirthdate: Scope = "user-read-birthdate"
-    val userReadEmail: Scope = "user-read-email"
+    val streaming:             Scope = "streaming"
+    val userFollowModify:      Scope = "user-follow-modify"
+    val userFollowRead:        Scope = "user-follow-read"
+    val userLibraryRead:       Scope = "user-library-read"
+    val userLibraryModify:     Scope = "user-library-modify"
+    val userReadPrivate:       Scope = "user-read-private"
+    val userReadBirthdate:     Scope = "user-read-birthdate"
+    val userReadEmail:         Scope = "user-read-email"
 
     val all = Seq(
       playlistReadPrivate,
