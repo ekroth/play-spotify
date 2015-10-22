@@ -15,6 +15,8 @@ package com.github.ekroth.spotify
   * extended by the package object.
   */
 private[spotify] trait Objects {
+
+  import scala.collection.immutable.Seq
   import play.api.libs.json._
   import play.api.libs.functional.syntax._
 
@@ -124,7 +126,9 @@ private[spotify] trait Objects {
     duration_ms: Int, explicit: Boolean, external_urls: ExternalURL, href: String, id: String, is_playable: Option[Boolean],
     linked_from: Option[TrackLink], name: String, preview_url: String, track_number: Int, tipe: String, uri: String)
 
-  /** The Json reads/writes macro can't handle generics very well. */
+  /** Paging represents both the Paging and the Cursor based paging object.
+    * The Json reads/writes macro can't handle generics very well.
+    */
   object Paging {
     // scalastyle:off method.name
 
@@ -133,7 +137,6 @@ private[spotify] trait Objects {
         (JsPath \ "items").write[Seq[T]] and
         (JsPath \ "limit").write[Int] and
         (JsPath \ "next").writeNullable[String] and
-        (JsPath \ "offset").write[Int] and
         (JsPath \ "previous").writeNullable[String] and
         (JsPath \ "total").write[Int]
     )(unlift(Paging.unapply[T])).transform(TypeNameFix.afterWrite)
@@ -143,12 +146,11 @@ private[spotify] trait Objects {
         (JsPath \ "items").read[Seq[T]] and
         (JsPath \ "limit").read[Int] and
         (JsPath \ "next").readNullable[String] and
-        (JsPath \ "offset").read[Int] and
         (JsPath \ "previous").readNullable[String] and
         (JsPath \ "total").read[Int]
     )(Paging.apply[T] _).compose(TypeNameFix.beforeRead)
   }
-  case class Paging[T](href: String, items: Seq[T], limit: Int, next: Option[String], offset: Int, previous: Option[String], total: Int)
+  case class Paging[T](href: String, items: Seq[T], limit: Int, next: Option[String], previous: Option[String], total: Int)
 
   object Copyright {
     implicit val CopyrightWrites = Json.writes[Copyright].transform(TypeNameFix.afterWrite)
