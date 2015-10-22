@@ -26,10 +26,10 @@ package object spotify extends Objects {
 
   import errorhandling._
 
-  object SpotifyError {
-    case class Permission(reason: String) extends Error
-    case class Json(error: play.api.libs.json.JsError, reason: String = "") extends Error
-    case class Impl(reason: String) extends Error
+  object SpotifyError extends Errors {
+    case class Json(error: play.api.libs.json.JsError, json: play.api.libs.json.JsValue) extends Error {
+      override def reason = "unable to parse json"
+    }
     case class Usage(error: ErrorMessage) extends Error {
       override def reason = error.toString
     }

@@ -98,14 +98,15 @@ trait Commands {
 
           /* attempt to read errors */
           resp.json.validate[ErrorMessage] match {
-            case JsSuccess(res2, _) => SpotifyError.Usage(res2).left[T]
-            case _ : JsError => SpotifyError.Json(e).left[T]
+            case JsSuccess(res2, _) => SpotifyError.Usage(res2).left
+            case e2 : JsError => SpotifyError.Collection(
+              Seq(SpotifyError.Json(e, resp.json), SpotifyError.Json(e2, resp.json))).left
           }
         }
       }
     }).recover {
-      case x: Exception => Error.Unknown(x).left
-      case x => SpotifyError.Impl(s"Odd error: $x").left
+      case x: Exception => SpotifyError.Thrown(x).left
+      case x => SpotifyError.Unknown(s"During `wsOptUrl`: $x").left
      }
   }
 
