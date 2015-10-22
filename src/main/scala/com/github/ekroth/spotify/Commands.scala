@@ -4,7 +4,8 @@
  * http://opensource.org/licenses/MIT
  */
 
-package com.github.ekroth.spotify
+package com.github.ekroth
+package spotify
 
 /** Commands corresponding to the Spotify Web API v1. */
 trait Commands {
@@ -19,6 +20,13 @@ trait Commands {
   import play.api.http.Status._
   import play.api.libs.ws._
   import play.api.libs.json._
+
+  import scalaz._
+  import Scalaz._
+  import scalaz.contrib._
+  import scalaz.contrib.std._
+
+  import errorhandling._
 
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
@@ -78,30 +86,28 @@ trait Commands {
   private[spotify] def encodeSpaces(x: String) = x.replace(" ", "%20")
 
   private[spotify] def wsOptUrl[T : Reads](url: String, token: Token, inner: Option[String])
-    (implicit app: Application, ec: ExecutionContext): Future[Option[T]] = WS.url(url)
-      .withHeaders("Authorization" -> s"Bearer ${token.accessToken}").get().map { resp =>
-//      logger.trace(s"ws: $url inner: $inner")
-      if (resp.status == OK) {
-//        logger.trace(s"""'$url' ok: '${resp.json}'""")
-        inner.map(x => resp.json \ x).getOrElse(resp.json).validate[T] match {
-          case JsError(errs) => {
-            logger.error(s"""'$url' json errors: '$errs'""")
-            logger.error(s"""for resp ${resp.json}""")
-            None
+    (implicit app: Application, ec: ExecutionContext): ResultF[T] = Result.okF {
+    (for {
+      resp <- WS.url(url).withHeaders("Authorization" -> s"Bearer ${token.accessToken}").get()
+    } yield {
+      val json = inner.map(x => resp.json \ x).getOrElse(resp.json)
+
+      json.validate[T] match {
+        case JsSuccess(res, _) => res.right
+        case e : JsError => {
+
+          /* attempt to read errors */
+          resp.json.validate[ErrorMessage] match {
+            case JsSuccess(res2, _) => SpotifyError.Usage(res2).left[T]
+            case _ : JsError => SpotifyError.Json(e).left[T]
           }
-          case JsSuccess(res, _) => Some(res)
         }
-      } else {
-//        logger.debug(s"""'$url' failz: '$resp'""")
-//        logger.debug(s"""whence: ${resp.body}, ${resp.status}""")
-        None
       }
-    }.recover {
-      case x => {
-        logger.debug(s"""'$url' fail: '$x'""")
-        None
-      }
-    }
+    }).recover {
+      case x: Exception => Error.Unknown(x).left
+      case x => SpotifyError.Impl(s"Odd error: $x").left
+     }
+  }
 
   /** Get the current user's private profile. */
   def currentUserProfile(user: UserAuth)(implicit app: Application, ec: ExecutionContext): Future[Option[UserPrivate]] =
