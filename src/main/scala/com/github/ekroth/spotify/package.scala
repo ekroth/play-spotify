@@ -48,6 +48,7 @@ package object spotify extends Objects {
 
   final implicit class RichFuture(val underlying: Future.type) extends AnyVal {
 
+    /** Unfold a value using a start value `start` and an operation `op`. Stops at the first `None`. */
     def unfold[T](start: => T)(op: T => Future[Option[T]])(implicit ec: ExecutionContext): Future[Seq[T]] =
       op(start).flatMap { pageOpt =>
         pageOpt match {
