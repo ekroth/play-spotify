@@ -12,22 +12,23 @@ trait Commands {
   self: Caching with Extensions =>
 
   import scala.collection.immutable.Seq
-  import scala.concurrent.Future
-  import scala.concurrent.ExecutionContext
-
-  import play.api.Logger
-  import play.api.Application
-  import play.api.http.Status._
-  import play.api.libs.ws._
-  import play.api.libs.json._
+  import scala.concurrent.{ ExecutionContext, Future }
 
   import scalaz._
   import Scalaz._
-  import scalaz.contrib._
-  import scalaz.contrib.std._
+
+  import akka.actor.ActorSystem
+  import akka.http.scaladsl.model.headers.{ Authorization, OAuth2BearerToken }
+  import akka.http.scaladsl.Http
+  import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+  import akka.http.scaladsl.model.HttpRequest
+  import akka.http.scaladsl.unmarshalling.Unmarshal
+  import akka.stream.Materializer
+  import spray.json._
 
   import errorhandling._
 
+  private val baseUrl = "https://api.spotify.com/v1"
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
 
@@ -60,8 +61,6 @@ trait Commands {
     )
   }
 
-  private[this] lazy val logger = Logger("spotify")
-
   /** Create a redirect URL.
     *
     * The server generates a state variable, selects some scopes and
@@ -75,7 +74,7 @@ trait Commands {
     val base = "https://accounts.spotify.com/authorize" +
     "?response_type=code" +
     s"&client_id=${srv.clientId}" +
-    s"""&redirect_uri=${srv.redirectUri}"""
+    s"&redirect_uri=${srv.redirectUri}"
 
     val withState = state.map(s => s"&state=$s").getOrElse("")
     val withScopes = if (scopes.isEmpty) "" else scopes.mkString("&scope=", " ", "")
@@ -83,27 +82,20 @@ trait Commands {
     base + withState + withScopes
   }
 
-  private[spotify] def encodeSpaces(x: String) = x.replace(" ", "%20")
-
-  private[spotify] def wsOptUrl[T : Reads](url: String, token: Token, inner: Option[String])
-    (implicit app: Application, ec: ExecutionContext): ResultF[T] = Result.okF {
+  private[spotify] def get[T : JsonFormat](url: String, token: Token, inner: Option[String])
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[T] = Result.okF {
     (for {
-      resp <- WS.url(url).withHeaders("Authorization" -> s"Bearer ${token.accessToken}").get()
+      resp <- Http().singleRequest(HttpRequest(
+        uri = url,
+        headers = Seq(Authorization(OAuth2BearerToken(token.accessToken)))))
+      jsonResp <- Unmarshal(resp.entity).to[JsValue]
     } yield {
-      val json = inner.map(x => resp.json \ x).getOrElse(resp.json)
+      val js = inner.map { x =>
+        val JsObject(fields) = jsonResp.asJsObject
+        fields(x)
+      }.getOrElse(jsonResp)
 
-      json.validate[T] match {
-        case JsSuccess(res, _) => res.right
-        case e : JsError => {
-
-          /* attempt to read errors */
-          resp.json.validate[ErrorMessage] match {
-            case JsSuccess(res2, _) => SpotifyError.Usage(res2).left
-            case e2 : JsError => SpotifyError.Collection(
-              Seq(SpotifyError.Json(e, resp.json), SpotifyError.Json(e2, resp.json))).left
-          }
-        }
-      }
+      js.convertTo[T].right
     }).recover {
       case x: Exception => SpotifyError.Thrown(x).left
       case x => SpotifyError.Unknown(s"During `wsOptUrl`: $x").left
@@ -111,36 +103,36 @@ trait Commands {
   }
 
   /** Get the current user's private profile. */
-  def currentUserProfile(user: UserAuth)(implicit app: Application, ec: ExecutionContext): ResultF[UserPrivate] =
-    wsOptUrl[UserPrivate](s"https://api.spotify.com/v1/me", user, None)
+  def currentUserProfile(user: UserAuth)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[UserPrivate] =
+    get[UserPrivate](s"$baseUrl/me", user, None)
 
   /** Get the current user's liked tracks. */
   def currentUserTracks(user: UserAuth, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[SavedTrack]] = {
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[SavedTrack]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    wsOptUrl[Paging[SavedTrack]](s"https://api.spotify.com/v1/me/tracks?limit=$limit", user, None)
+    get[Paging[SavedTrack]](s"$baseUrl/me/tracks?limit=$limit", user, None)
       .map(_.withExt())
   }
 
   def currentUserFollowedArtists(user: UserAuth, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    wsOptUrl[Paging[ArtistFull]](s"https://api.spotify.com/v1/me/following?type=artist&limit=$limit", user, Some("artists"))
+    get[Paging[ArtistFull]](s"$baseUrl/me/following?type=artist&limit=$limit", user, Some("artists"))
       .map(_.withExt(Some("artists")))
   }
 
   def currentUserIsFollowing(user: UserAuth, ids: Seq[String])
-    (implicit app: Application, ec: ExecutionContext): ResultF[Seq[(String, Boolean)]] = {
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Seq[(String, Boolean)]] = {
     requireBounds(1, ids.size, spotifyMaxLimit, "ids")
 
-    wsOptUrl[Seq[Boolean]](s"""https://api.spotify.com/v1/me/following/contains?type=artist&ids=${ids.mkString(",")}""", user, None)
+    get[Seq[Boolean]](s"$baseUrl/me/following/contains?type=artist&ids=${ids.mkString(",")}", user, None)
       .map(x => ids.zip(x))
   }
 
   def searchArtist(client: ClientAuth, query: String, limit: Int = spotifyMaxLimit)
-    (implicit app: Application, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    wsOptUrl[Paging[ArtistFull]](s"""https://api.spotify.com/v1/search?type=artist&q=${encodeSpaces(query)}""", client, Some("artists"))
+    get[Paging[ArtistFull]](s"$baseUrl/search?type=artist&q=${query.escaped}", client, Some("artists"))
       .map(_.withExt(Some("artists")))
   }
 
@@ -150,7 +142,7 @@ trait Commands {
     * available in the Cache. The cache is refreshed if the user
     * authorization refresh is successful.
     */
-  def userRefresh(authCode: AuthCode)(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
+val waaat = """  def userRefresh(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
     loadUser(authCode) match {
       case Some(user) => {
         val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
@@ -171,7 +163,7 @@ trait Commands {
           refreshedUser.asOpt
         }.recover {
           case x => {
-            logger.debug(s"""userRefresh fail: '$x'""")
+            logger.debug(s"userRefresh fail: '$x'")
             None
           }
         }
@@ -185,13 +177,13 @@ trait Commands {
     *
     * This doesn't exists, and is equal to `clientAuth`.
     */
-  def clientRefresh(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = clientAuth
+  def clientRefresh(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = clientAuth
 
   /** Authorize the client.
     *
     * Authorize the client and update the cache.
     */
-  def clientAuth(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
+  def clientAuth(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
     val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
       "grant_type" -> Seq("client_credentials"),
       "client_id" -> Seq(srv.clientId),
@@ -209,7 +201,7 @@ trait Commands {
       client.asOpt
     }.recover {
       case x => {
-        logger.debug(s"""clientAuth fail: '$x'""")
+        logger.debug(s"clientAuth fail: '$x'")
         None
       }
     }
@@ -220,7 +212,7 @@ trait Commands {
    * Make a POST request to the spotify "/api/token".
    * The `UserAuth` is saved in the cache with key `authCode`.
    */
-  def userAuth(authCode: AuthCode)(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
+  def userAuth(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
     val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
       "grant_type" -> Seq("authorization_code"),
       "code" -> Seq(authCode),
@@ -241,14 +233,14 @@ trait Commands {
       user.asOpt
     }.recover {
       case x => {
-        logger.debug(s"""userAuth fail: '$x'""")
+        logger.debug(s"userAuth fail: '$x'")
         None
       }
     }
   }
 
   /** Get client authorization and refresh if expired. This requires that the client has authorized before. */
-  def getClient(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
+  def getClient(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
     loadClient() match {
       case Some(client) if client.isExpired => clientRefresh
       case client: Some[_] => Future.successful(client)
@@ -257,11 +249,13 @@ trait Commands {
   }
 
   /* Get user and refresh as needed. This requires that the user has authorized before. */
-  def getUser(authCode: String)(implicit app: Application, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
+  def getUser(authCode: String)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
     loadUser(authCode) match {
       case Some(user) if user.isExpired => userRefresh(authCode)
       case user: Some[_] => Future.successful(user)
       case None => Future.successful(None)
     }
   }
+"""
+
 }

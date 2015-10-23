@@ -4,7 +4,8 @@
  * http://opensource.org/licenses/MIT
  */
 
-package com.github.ekroth.spotify
+package com.github.ekroth
+package spotify
 
 trait Caching {
   def saveUser(user: UserAuth): Unit
@@ -24,17 +25,4 @@ trait NoCaching extends Caching {
   override def saveClient(client: ClientAuth) = ()
 
   override def loadClient() = None
-}
-
-trait PlayCacheCaching extends Caching {
-  import play.api.Play.current
-  import play.api.cache._
-
-  override def saveUser(user: UserAuth) = Cache.set(user.oauth, user)
-
-  override def loadUser(oauth: String) = Cache.getAs[UserAuth](oauth)
-
-  override def saveClient(client: ClientAuth) = Cache.set("client", client)
-
-  override def loadClient() = Cache.getAs[ClientAuth]("client")
 }
