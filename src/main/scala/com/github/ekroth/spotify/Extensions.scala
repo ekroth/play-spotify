@@ -40,6 +40,9 @@ trait Extensions {
     /** If page is the last one. */
     def isLastPage: Boolean = underlying.next.isEmpty
 
+    /** Total amount of entries. */
+    def totalEntries: Int = underlying.total
+
     /** Previous underlying object. */
     def previousPage(token: Token)(implicit app: Application, ec: ExecutionContext): ResultF[Option[Pager[T]]] =
       previousMeUrl match {
