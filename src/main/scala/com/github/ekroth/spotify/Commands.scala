@@ -43,30 +43,30 @@ trait Commands {
   object Scope {
     private[spotify] def apply(s: String): Scope = Tag.of[ScopeTag](s)
 
-    val playlistReadPrivate:   Scope = Scope("playlist-read-private")
-    val playlistModifyPublic:  Scope = Scope("playlist-modify-public")
     val playlistModifyPrivate: Scope = Scope("playlist-modify-private")
+    val playlistModifyPublic:  Scope = Scope("playlist-modify-public")
+    val playlistReadPrivate:   Scope = Scope("playlist-read-private")
     val streaming:             Scope = Scope("streaming")
     val userFollowModify:      Scope = Scope("user-follow-modify")
     val userFollowRead:        Scope = Scope("user-follow-read")
-    val userLibraryRead:       Scope = Scope("user-library-read")
     val userLibraryModify:     Scope = Scope("user-library-modify")
-    val userReadPrivate:       Scope = Scope("user-read-private")
+    val userLibraryRead:       Scope = Scope("user-library-read")
     val userReadBirthdate:     Scope = Scope("user-read-birthdate")
     val userReadEmail:         Scope = Scope("user-read-email")
+    val userReadPrivate:       Scope = Scope("user-read-private")
 
     val all: Seq[Scope] = Seq(
-      playlistReadPrivate,
-      playlistModifyPublic,
       playlistModifyPrivate,
+      playlistModifyPublic,
+      playlistReadPrivate,
       streaming,
       userFollowModify,
       userFollowRead,
-      userLibraryRead,
       userLibraryModify,
-      userReadPrivate,
+      userLibraryRead,
       userReadBirthdate,
-      userReadEmail
+      userReadEmail,
+      userReadPrivate
     )
   }
 
