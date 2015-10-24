@@ -39,6 +39,10 @@ trait Commands {
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
 
+  /** Use tagged Strings in order to force the user to use the provided Scope-values.
+    * The trait is private, and therefore the user may only use the values defined in
+    * the `Scope` object. Imagine, this is a purely compile-time requirement, and the
+    * runtime overhead is zero. This is kind of cool. */
   private[spotify] trait ScopeTag
   private[spotify] type Scope = String @@ ScopeTag
 
