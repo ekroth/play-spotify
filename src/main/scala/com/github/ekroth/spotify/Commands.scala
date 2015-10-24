@@ -26,6 +26,7 @@ trait Commands {
   import akka.http.scaladsl.unmarshalling.Unmarshal
   import akka.stream.Materializer
   import spray.json._
+  import DefaultJsonProtocol._
 
   import errorhandling._
 
@@ -145,37 +146,36 @@ trait Commands {
     * available in the Cache. The cache is refreshed if the user
     * authorization refresh is successful.
     */
-val waaat = """  def userRefresh(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
+  def userRefresh(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[Option[UserAuth]] = Result.async {
     loadUser(authCode) match {
       case Some(user) => {
-        val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
-          "grant_type" -> Seq("refresh_token"),
-          "refresh_token" -> Seq(user.refreshToken),
-          "client_id" -> Seq(srv.clientId),
-          "client_secret" -> Seq(srv.clientSecret)))
+        (for {
+          post <- Http().singleRequest(HttpRequest(
+            POST,
+            uri = s"$accountsBaseUrl/api/token",
+            headers = Seq(
+              RawHeader("grant_type", "refresh_token"),
+              RawHeader("refresh_token", user.refreshToken),
+              RawHeader("client_id", srv.clientId),
+              RawHeader("client_secret", srv.clientSecret))))
+          jsonResp <- Unmarshal(post.entity).to[JsValue]
+        } yield {
+          val JsObject(fields) = jsonResp.asJsObject
+          val JsString(accessToken) = fields("access_token")
+          val JsNumber(expiresIn) = fields("expires_in")
+          val refreshedUser = user.copy(accessToken = accessToken, expires = (System.currentTimeMillis / 1000 + expiresIn.toLong))
 
-        post.map { resp =>
-          val json = resp.json
-          val refreshedUser = for {
-            accessToken <- (json \ "access_token").validate[String]
-            expiresIn <- (json \ "expires_in").validate[Int]
-            if resp.status == OK
-          } yield user.copy(accessToken = accessToken, expires = (System.currentTimeMillis / 1000 + expiresIn))
-
-          refreshedUser.foreach(saveUser)
-          refreshedUser.asOpt
-        }.recover {
-          case x => {
-            logger.debug(s"userRefresh fail: '$x'")
-            None
-          }
+          saveUser(user)
+          user.some.right
+        }).recover {
+          case x: Exception => SpotifyError.Thrown(x).left
+          case x => SpotifyError.Unknown(s"During `userRefresh`: $x").left
         }
-
       }
-      case None => Future.successful(None)
+      case None => Future.successful(None.right)
     }
   }
-"""
+
   /** Refresh client token.
     *
     * This doesn't exists, and is equal to `clientAuth`.
@@ -250,15 +250,14 @@ val waaat = """  def userRefresh(authCode: AuthCode)(implicit sys: ActorSystem, 
       case None => clientAuth
     }
   }
-val bggg = """
+
   /* Get user and refresh as needed. This requires that the user has authorized before. */
-  def getUser(authCode: String)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
+  def getUser(authCode: String)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[Option[UserAuth]] = {
     loadUser(authCode) match {
       case Some(user) if user.isExpired => userRefresh(authCode)
-      case user: Some[_] => Future.successful(user)
-      case None => Future.successful(None)
+      case Some(user) => Result.okF(user.some)
+      case None => Result.okF(None)
     }
   }
-"""
 
 }
