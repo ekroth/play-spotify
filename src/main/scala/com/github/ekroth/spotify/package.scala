@@ -27,9 +27,6 @@ package object spotify extends Objects {
   import errorhandling._
 
   object SpotifyError extends Errors {
-    case class Json(error: play.api.libs.json.JsError, json: play.api.libs.json.JsValue) extends Error {
-      override def reason = "unable to parse json"
-    }
     case class Usage(error: ErrorMessage) extends Error {
       override def reason = error.toString
     }
@@ -56,5 +53,9 @@ package object spotify extends Objects {
           case None => Future.successful(Seq(start))
         }
       }
+  }
+
+  implicit class RichString(private val underlying: String) extends AnyVal {
+    def escaped: String = akka.http.scaladsl.model.Uri.Path(underlying).toString
   }
 }

@@ -9,6 +9,8 @@ package com.github.ekroth.spotify
 trait PlayCommands {
   self: Commands =>
 
+  val bugs = """
+
   import scala.collection.immutable.Seq
   import scala.concurrent.{ Future, ExecutionContext }
 
@@ -96,5 +98,5 @@ trait PlayCommands {
     getClient.flatMap { clientOpt =>
       clientOpt.map(block).getOrElse(Future.successful(fallback))
     }
-  }
+  }"""
 }

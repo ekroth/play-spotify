@@ -4,7 +4,8 @@
  * http://opensource.org/licenses/MIT
  */
 
-package com.github.ekroth.spotify
+package com.github.ekroth
+package spotify
 
 trait Spotify {
   self: Caching =>
