@@ -30,26 +30,32 @@ trait Commands {
 
   import errorhandling._
 
-  private val accountsBaseUrl = "https://accounts.spotify.com"
-  private val baseUrl = "https://api.spotify.com/v1"
+  private[spotify] val accountsBaseUrl = "https://accounts.spotify.com"
+  private[spotify] val baseUrl = "https://api.spotify.com/v1"
+
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
 
-  /** Scopes for user access. */
-  object Scopes {
-    val playlistReadPrivate:   Scope = "playlist-read-private"
-    val playlistModifyPublic:  Scope = "playlist-modify-public"
-    val playlistModifyPrivate: Scope = "playlist-modify-private"
-    val streaming:             Scope = "streaming"
-    val userFollowModify:      Scope = "user-follow-modify"
-    val userFollowRead:        Scope = "user-follow-read"
-    val userLibraryRead:       Scope = "user-library-read"
-    val userLibraryModify:     Scope = "user-library-modify"
-    val userReadPrivate:       Scope = "user-read-private"
-    val userReadBirthdate:     Scope = "user-read-birthdate"
-    val userReadEmail:         Scope = "user-read-email"
+  private[spotify] trait ScopeTag
+  private[spotify] type Scope = String @@ ScopeTag
 
-    val all = Seq(
+  /** Scopes for user access. */
+  object Scope {
+    private[spotify] def apply(s: String): Scope = Tag.of[ScopeTag](s)
+
+    val playlistReadPrivate:   Scope = Scope("playlist-read-private")
+    val playlistModifyPublic:  Scope = Scope("playlist-modify-public")
+    val playlistModifyPrivate: Scope = Scope("playlist-modify-private")
+    val streaming:             Scope = Scope("streaming")
+    val userFollowModify:      Scope = Scope("user-follow-modify")
+    val userFollowRead:        Scope = Scope("user-follow-read")
+    val userLibraryRead:       Scope = Scope("user-library-read")
+    val userLibraryModify:     Scope = Scope("user-library-modify")
+    val userReadPrivate:       Scope = Scope("user-read-private")
+    val userReadBirthdate:     Scope = Scope("user-read-birthdate")
+    val userReadEmail:         Scope = Scope("user-read-email")
+
+    val all: Seq[Scope] = Seq(
       playlistReadPrivate,
       playlistModifyPublic,
       playlistModifyPrivate,
