@@ -18,16 +18,18 @@ trait Commands {
   import Scalaz._
 
   import akka.actor.ActorSystem
-  import akka.http.scaladsl.model.headers.{ Authorization, OAuth2BearerToken }
+  import akka.http.scaladsl.model.headers.{ Authorization, OAuth2BearerToken, RawHeader }
   import akka.http.scaladsl.Http
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
   import akka.http.scaladsl.model.HttpRequest
+  import akka.http.scaladsl.model.HttpMethods.{ GET, POST }
   import akka.http.scaladsl.unmarshalling.Unmarshal
   import akka.stream.Materializer
   import spray.json._
 
   import errorhandling._
 
+  private val accountsBaseUrl = "https://accounts.spotify.com"
   private val baseUrl = "https://api.spotify.com/v1"
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
@@ -71,7 +73,7 @@ trait Commands {
     * @param scopes Scopes.
     */
   def redirectUri(state: Option[String], scopes: Scope*)(implicit srv: Credentials): String = {
-    val base = "https://accounts.spotify.com/authorize" +
+    val base = s"$accountsBaseUrl/authorize" +
     "?response_type=code" +
     s"&client_id=${srv.clientId}" +
     s"&redirect_uri=${srv.redirectUri}"
@@ -83,9 +85,10 @@ trait Commands {
   }
 
   private[spotify] def get[T : JsonFormat](url: String, token: Token, inner: Option[String])
-    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[T] = Result.okF {
+    (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[T] = Result.async {
     (for {
       resp <- Http().singleRequest(HttpRequest(
+        GET,
         uri = url,
         headers = Seq(Authorization(OAuth2BearerToken(token.accessToken)))))
       jsonResp <- Unmarshal(resp.entity).to[JsValue]
@@ -98,7 +101,7 @@ trait Commands {
       js.convertTo[T].right
     }).recover {
       case x: Exception => SpotifyError.Thrown(x).left
-      case x => SpotifyError.Unknown(s"During `wsOptUrl`: $x").left
+      case x => SpotifyError.Unknown(s"During `get`: $x").left
      }
   }
 
@@ -172,82 +175,82 @@ val waaat = """  def userRefresh(authCode: AuthCode)(implicit sys: ActorSystem, 
       case None => Future.successful(None)
     }
   }
-
+"""
   /** Refresh client token.
     *
     * This doesn't exists, and is equal to `clientAuth`.
     */
-  def clientRefresh(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = clientAuth
+  def clientRefresh(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[ClientAuth] = clientAuth
 
   /** Authorize the client.
     *
     * Authorize the client and update the cache.
     */
-  def clientAuth(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
-    val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
-      "grant_type" -> Seq("client_credentials"),
-      "client_id" -> Seq(srv.clientId),
-      "client_secret" -> Seq(srv.clientSecret)))
+  def clientAuth(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[ClientAuth] = Result.async {
+    (for {
+      post <- Http().singleRequest(HttpRequest(
+        POST,
+        uri = s"$accountsBaseUrl/api/token",
+        headers = Seq(
+          RawHeader("grant_type", "client_credentials"),
+          RawHeader("client_id", srv.clientId),
+          RawHeader("client_secret", srv.clientSecret))))
+      jsonResp <- Unmarshal(post.entity).to[JsValue]
+    } yield {
+      val JsObject(fields) = jsonResp.asJsObject
+      val JsString(accessToken) = fields("access_token")
+      val JsNumber(expiresIn) = fields("expires_in")
+      val client = ClientAuth(accessToken, expiresIn.toLong)
 
-    post.map { resp =>
-      val json = resp.json
-      val client = for {
-        accessToken <- (json \ "access_token").validate[String]
-        expiresIn <- (json \ "expires_in").validate[Int]
-        if resp.status == OK
-      } yield ClientAuth(accessToken, expiresIn)
-
-      client.foreach(saveClient)
-      client.asOpt
-    }.recover {
-      case x => {
-        logger.debug(s"clientAuth fail: '$x'")
-        None
-      }
+      saveClient(client)
+      client.right
+    }).recover {
+      case x: Exception => SpotifyError.Thrown(x).left
+      case x => SpotifyError.Unknown(s"During `clientAuth`: $x").left
     }
   }
+
 
   /* Authorize user using the authorization code.
    *
    * Make a POST request to the spotify "/api/token".
    * The `UserAuth` is saved in the cache with key `authCode`.
    */
-  def userAuth(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
-    val post = WS.url("https://accounts.spotify.com/api/token").post(Map(
-      "grant_type" -> Seq("authorization_code"),
-      "code" -> Seq(authCode),
-      "redirect_uri" -> Seq(srv.redirectUri),
-      "client_id" -> Seq(srv.clientId),
-      "client_secret" -> Seq(srv.clientSecret)))
+  def userAuth(authCode: AuthCode)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[UserAuth] = Result.async {
+    (for {
+      post <- Http().singleRequest(HttpRequest(
+        POST,
+        uri = s"$accountsBaseUrl/api/token",
+        headers = Seq(
+          RawHeader("grant_type", "authorization_code"),
+          RawHeader("code", authCode),
+          RawHeader("client_id", srv.clientId),
+          RawHeader("client_secret", srv.clientSecret))))
+      jsonResp <- Unmarshal(post.entity).to[JsValue]
+    } yield {
+      val JsObject(fields) = jsonResp.asJsObject
+      val JsString(accessToken) = fields("access_token")
+      val JsNumber(expiresIn) = fields("expires_in")
+      val JsString(refreshToken) = fields("refresh_token")
+      val user = UserAuth(authCode, accessToken, expiresIn.toLong, refreshToken)
 
-    post.map { resp =>
-      val json = resp.json
-      val user = for {
-        accessToken <- (json \ "access_token").validate[String]
-        expiresIn <- (json \ "expires_in").validate[Int]
-        refreshToken <- (json \ "refresh_token").validate[String]
-        if resp.status == OK
-      } yield UserAuth(authCode, accessToken, expiresIn, refreshToken)
-
-      user.foreach(saveUser)
-      user.asOpt
-    }.recover {
-      case x => {
-        logger.debug(s"userAuth fail: '$x'")
-        None
-      }
+      saveUser(user)
+      user.right
+    }).recover {
+      case x: Exception => SpotifyError.Thrown(x).left
+      case x => SpotifyError.Unknown(s"During `userAuth`: $x").left
     }
   }
 
   /** Get client authorization and refresh if expired. This requires that the client has authorized before. */
-  def getClient(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[ClientAuth]] = {
+  def getClient(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): ResultF[ClientAuth] = {
     loadClient() match {
       case Some(client) if client.isExpired => clientRefresh
-      case client: Some[_] => Future.successful(client)
+      case Some(client) => Result.okF(client)
       case None => clientAuth
     }
   }
-
+val bggg = """
   /* Get user and refresh as needed. This requires that the user has authorized before. */
   def getUser(authCode: String)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext, srv: Credentials): Future[Option[UserAuth]] = {
     loadUser(authCode) match {

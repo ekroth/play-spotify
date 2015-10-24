@@ -45,14 +45,14 @@ trait Extensions {
     def previousPage(token: Token)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Option[Pager[T]]] =
       previousMeUrl match {
         case Some(url) => get[Paging[T]](url, token, inner).map(x => Some(x.withExt(inner)))
-        case None => Result.okF(Future.successful(None.right))
+        case None => Result.okF(None)
       }
 
     /** Next underlying object. */
     def nextPage(token: Token)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Option[Pager[T]]] =
       nextMeUrl match {
         case Some(url) => get[Paging[T]](url, token, inner).map(x => Some(x.withExt(inner)))
-        case None => Result.okF(Future.successful(None.right))
+        case None => Result.okF(None)
       }
 
 
@@ -72,7 +72,7 @@ trait Extensions {
     }
 
     /* Retrieve this page's items and all remaining items. */
-    def allItems(token: Token)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Seq[T]] = Result.okF {
+    def allItems(token: Token)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Seq[T]] = Result.async {
       val pages = allPages(token).map(Result.sequence(_))
       pages.map { pageResult =>
         pageResult.map { page =>
