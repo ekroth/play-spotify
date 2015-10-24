@@ -20,6 +20,7 @@ trait Objects {
   import scala.collection.immutable.Seq
 
   import spray.json._
+  import DefaultJsonProtocol._
 
   type ExternalID = Map[String, String]
   type ExternalURL = Map[String, String]
@@ -52,17 +53,17 @@ trait Objects {
     }
   }
 
-  object Image extends DefaultJsonProtocol {
+  object Image {
     implicit val imageFormat = jsonFormat3(Image.apply).withTipe
   }
   case class Image(height: Option[Int], url: String, width: Option[Int])
 
-  object Tracks extends DefaultJsonProtocol {
+  object Tracks {
     implicit val tracksFormat = jsonFormat2(Tracks.apply).withTipe
   }
   case class Tracks(href: String, total: Int)
 
-  object Followers extends DefaultJsonProtocol {
+  object Followers {
     implicit val followersFormat = jsonFormat2(Followers.apply).withTipe
   }
   case class Followers(href: Option[String], total: Int)
@@ -70,34 +71,34 @@ trait Objects {
   /** Note: It turns out that sometimes Spotify skip name/followers/images for UserPublic.
     * https://developer.spotify.com/web-api/object-model/#comment-1769235635
     */
-  object UserPublicOther extends DefaultJsonProtocol {
+  object UserPublicOther {
     implicit val userPublicOtherFormat = jsonFormat5(UserPublicOther.apply).withTipe
   }
   case class UserPublicOther(external_urls: ExternalURL, href: String, id: String, tipe: String, uri: String)
 
-  object UserPublic extends DefaultJsonProtocol {
+  object UserPublic {
     implicit val userPublicFormat = jsonFormat8(UserPublic.apply).withTipe
   }
   case class UserPublic(display_name: String, external_urls: ExternalURL, followers: Followers,
     href: String, id: String, images: Seq[Image], tipe: String, uri: String)
 
-  object AlbumSimplified extends DefaultJsonProtocol {
+  object AlbumSimplified {
     implicit val albumSimplifiedFormat = jsonFormat9(AlbumSimplified.apply).withTipe
   }
   case class AlbumSimplified(album_type: String, available_markets: Seq[String], external_urls: ExternalURL,
     href: String, id: String, images: Seq[Image], name: String, tipe: String, uri: String)
 
-  object ArtistSimplified extends DefaultJsonProtocol {
+  object ArtistSimplified {
     implicit val artistSimplifiedFormat = jsonFormat6(ArtistSimplified.apply).withTipe
   }
   case class ArtistSimplified(external_urls: ExternalURL, href: String, id: String, name: String, tipe: String, uri: String)
 
-  object TrackLink extends DefaultJsonProtocol {
+  object TrackLink {
     implicit val trackLinkFormat = jsonFormat5(TrackLink.apply).withTipe
   }
   case class TrackLink(external_urls: ExternalURL, href: String, id: String, tipe: String, uri: String)
 
-  object TrackFull extends DefaultJsonProtocol {
+  object TrackFull {
     implicit val trackFullFormat = jsonFormat18(TrackFull.apply).withTipe
   }
   case class TrackFull(album: AlbumSimplified, artists: Seq[ArtistSimplified], available_markets: Seq[String],
@@ -105,29 +106,29 @@ trait Objects {
     href: String, id: String, is_playable: Option[Boolean], linked_from: Option[TrackLink], name: String, popularity: Int,
     preview_url: Option[String], track_number: Int, tipe: String, uri: String)
 
-  object PlaylistTrack extends DefaultJsonProtocol {
+  object PlaylistTrack {
     implicit val playlistTrackFormat = jsonFormat3(PlaylistTrack.apply).withTipe
   }
   case class PlaylistTrack(added_at: Option[Timestamp], added_by: UserPublicOther, track: TrackFull)
 
-  object TrackSimplified extends DefaultJsonProtocol {
+  object TrackSimplified {
     implicit val trackSimplifiedFormat = jsonFormat15(TrackSimplified.apply).withTipe
   }
   case class TrackSimplified(artists: Seq[ArtistSimplified], available_markets: Seq[String], disc_number: Int,
     duration_ms: Int, explicit: Boolean, external_urls: ExternalURL, href: String, id: String, is_playable: Option[Boolean],
     linked_from: Option[TrackLink], name: String, preview_url: String, track_number: Int, tipe: String, uri: String)
 
-  object Paging extends DefaultJsonProtocol {
+  object Paging {
     implicit def pagingFormat[T : JsonFormat] = jsonFormat6(Paging.apply[T]).withTipe
   }
   case class Paging[T](href: String, items: Seq[T], limit: Int, next: Option[String], previous: Option[String], total: Int)
 
-  object Copyright extends DefaultJsonProtocol {
+  object Copyright {
     implicit val copyrightFormat = jsonFormat2(Copyright.apply).withTipe
   }
   case class Copyright(text: String, tipe: String)
 
-  object AlbumFull extends DefaultJsonProtocol {
+  object AlbumFull {
     implicit val albumFullFormat = jsonFormat17(AlbumFull.apply).withTipe
   }
   case class AlbumFull(album_type: String, artists: Seq[ArtistSimplified], available_markets: Seq[String],
@@ -135,41 +136,41 @@ trait Objects {
     href: String, id: String, images: Seq[Image], name: String, popularity: Int, release_date: String,
     release_date_precision: String, tracks: Paging[TrackSimplified], tipe: String, uri: String)
 
-  object ArtistFull extends DefaultJsonProtocol {
+  object ArtistFull {
     implicit val artistFullFormat = jsonFormat10(ArtistFull.apply).withTipe
   }
   case class ArtistFull(external_urls: ExternalURL, followers: Followers, genres: Seq[String], href: String,
     id: String, images: Seq[Image], name: String, popularity: Int, tipe: String, uri: String)
 
-  object Category extends DefaultJsonProtocol {
+  object Category {
     implicit val categoryFormat = jsonFormat4(Category.apply).withTipe
   }
   case class Category(href: String, icons: Seq[Image], id: String, name: String)
 
-  object ErrorMessage extends DefaultJsonProtocol {
+  object ErrorMessage {
     implicit val errorMessageFormat = jsonFormat2(ErrorMessage.apply).withTipe
   }
   case class ErrorMessage(status: Int, message: String)
 
-  object PlaylistFull extends DefaultJsonProtocol {
+  object PlaylistFull {
     implicit val playlistFullFormat = jsonFormat14(PlaylistFull.apply).withTipe
   }
   case class PlaylistFull(collaborative: Boolean, description: Option[String], external_urls: ExternalURL,
     followers: Followers, href: String, id: String, images: Seq[Image], name: String, owner: UserPublicOther,
     public: Option[Boolean], snapshot_id: String, tracks: Paging[PlaylistTrack], tipe: String, uri: String)
 
-  object PlaylistSimplified extends DefaultJsonProtocol {
+  object PlaylistSimplified {
     implicit val playlistSimplifiedFormat = jsonFormat11(PlaylistSimplified.apply).withTipe
   }
   case class PlaylistSimplified(collaborative: Boolean, external_urls: ExternalURL, href: String, id: String,
     images: Seq[Image], name: String, owner: UserPublic, public: Option[Boolean], tracks: Tracks, tipe: String, uri: String)
 
-  object SavedTrack extends DefaultJsonProtocol {
+  object SavedTrack {
     implicit val savedTrackFormat = jsonFormat2(SavedTrack.apply).withTipe
   }
   case class SavedTrack(added_at: Timestamp, track: TrackFull)
 
-  object UserPrivate extends DefaultJsonProtocol {
+  object UserPrivate {
     implicit val userPrivateFormat = jsonFormat12(UserPrivate.apply).withTipe
   }
   case class UserPrivate(birthdate: Option[String], country: Option[String], display_name: String, email: Option[String],
