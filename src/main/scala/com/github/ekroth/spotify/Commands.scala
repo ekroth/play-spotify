@@ -21,7 +21,8 @@ trait Commands {
   import akka.http.scaladsl.model.headers.{ Authorization, OAuth2BearerToken, RawHeader }
   import akka.http.scaladsl.Http
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-  import akka.http.scaladsl.model.HttpRequest
+  import akka.http.scaladsl.model.{ HttpRequest, Uri }
+  import akka.http.scaladsl.model.Uri.Path
   import akka.http.scaladsl.model.HttpMethods.{ GET, POST }
   import akka.http.scaladsl.unmarshalling.Unmarshal
   import akka.stream.Materializer
@@ -30,8 +31,10 @@ trait Commands {
 
   import errorhandling._
 
-  private[spotify] val accountsBaseUrl = "https://accounts.spotify.com"
-  private[spotify] val baseUrl = "https://api.spotify.com/v1"
+  private[spotify] val accountsBaseUri = Uri.Empty.withScheme(Uri.httpScheme(true)).withHost("accounts.spotify.com")
+  private[spotify] val baseUri = Uri.Empty.withScheme(Uri.httpScheme(true)).withHost("api.spotify.com").withPath(Path / "v1")
+  private[spotify] val tokenUri = accountsBaseUri.withPath(Path / "api" / "token")
+  private[spotify] val meUri = baseUri.withPath(Path / "me")
 
   val spotifyMaxOffset = Int.MaxValue
   val spotifyMaxLimit = 50
@@ -42,6 +45,7 @@ trait Commands {
   /** Scopes for user access. */
   object Scope {
     private[spotify] def apply(s: String): Scope = Tag.of[ScopeTag](s)
+    private[spotify] def unwrap(s: Scope): String = Tag.of[ScopeTag].unwrap(s)
 
     val playlistModifyPrivate: Scope = Scope("playlist-modify-private")
     val playlistModifyPublic:  Scope = Scope("playlist-modify-public")
@@ -79,24 +83,24 @@ trait Commands {
     * @param state Optional state variable.
     * @param scopes Scopes.
     */
-  def redirectUri(state: Option[String], scopes: Scope*)(implicit srv: Credentials): String = {
-    val base = s"$accountsBaseUrl/authorize" +
-    "?response_type=code" +
-    s"&client_id=${srv.clientId}" +
-    s"&redirect_uri=${srv.redirectUri}"
+  def redirectUri(state: Option[String], scopes: Scope*)(implicit srv: Credentials): Uri = {
+    val base = accountsBaseUri.withPath(Path / "authorize").withQuery(
+      ("response_type", "code"),
+      ("client_id", srv.clientId),
+      ("redirect_uri", srv.redirectUri))
 
-    val withState = state.map(s => s"&state=$s").getOrElse("")
-    val withScopes = if (scopes.isEmpty) "" else scopes.mkString("&scope=", " ", "")
 
-    base + withState + withScopes
+    val withState = state.toList.map(s => ("state", s))
+    val withScopes = scopes.toList.map(s => ("scope", Scope.unwrap(s)))
+    base.withQuery((withState ++ withScopes): _*)
   }
 
-  private[spotify] def get[T : JsonFormat](url: String, token: Token, inner: Option[String])
+  private[spotify] def get[T : JsonFormat](uri: Uri, token: Token, inner: Option[String])
     (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[T] = Result.async {
     (for {
       resp <- Http().singleRequest(HttpRequest(
         GET,
-        uri = url,
+        uri = uri,
         headers = Seq(Authorization(OAuth2BearerToken(token.accessToken)))))
       jsonResp <- Unmarshal(resp.entity).to[JsValue]
     } yield {
@@ -114,36 +118,43 @@ trait Commands {
 
   /** Get the current user's private profile. */
   def currentUserProfile(user: UserAuth)(implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[UserPrivate] =
-    get[UserPrivate](s"$baseUrl/me", user, None)
+    get[UserPrivate](meUri, user, None)
 
   /** Get the current user's liked tracks. */
   def currentUserTracks(user: UserAuth, limit: Int = spotifyMaxLimit)
     (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[SavedTrack]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    get[Paging[SavedTrack]](s"$baseUrl/me/tracks?limit=$limit", user, None)
-      .map(_.withExt())
+    get[Paging[SavedTrack]](
+      meUri.withPath(Path / "tracks").withQuery(("limit", limit.toString)),
+      user,
+      None).map(_.withExt())
   }
 
   def currentUserFollowedArtists(user: UserAuth, limit: Int = spotifyMaxLimit)
     (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    get[Paging[ArtistFull]](s"$baseUrl/me/following?type=artist&limit=$limit", user, Some("artists"))
-      .map(_.withExt(Some("artists")))
+    get[Paging[ArtistFull]](
+      meUri.withPath(Path / "following").withQuery(("type", "artist"), ("limit", limit.toString)),
+      user,
+      Some("artists")).map(_.withExt(Some("artists")))
   }
 
   def currentUserIsFollowing(user: UserAuth, ids: Seq[String])
     (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Seq[(String, Boolean)]] = {
     requireBounds(1, ids.size, spotifyMaxLimit, "ids")
-
-    get[Seq[Boolean]](s"$baseUrl/me/following/contains?type=artist&ids=${ids.mkString(",")}", user, None)
-      .map(x => ids.zip(x))
+    get[Seq[Boolean]](
+      meUri.withPath(Path / "following" / "contains").withQuery(("type", "artist"), ("ids", ids.mkString(","))),
+      user,
+      None).map(x => ids.zip(x))
   }
 
   def searchArtist(client: ClientAuth, query: String, limit: Int = spotifyMaxLimit)
     (implicit sys: ActorSystem, fm: Materializer, ec: ExecutionContext): ResultF[Pager[ArtistFull]] = {
     requireBounds(1, limit, spotifyMaxLimit, "limit")
-    get[Paging[ArtistFull]](s"$baseUrl/search?type=artist&q=${query.escaped}", client, Some("artists"))
-      .map(_.withExt(Some("artists")))
+    get[Paging[ArtistFull]](
+      baseUri.withPath(Path / "search").withQuery(("type", "artist"), ("q", query)),
+      client,
+      Some("artists")).map(_.withExt(Some("artists")))
   }
 
   /** Refresh user token.
@@ -158,7 +169,7 @@ trait Commands {
         (for {
           post <- Http().singleRequest(HttpRequest(
             POST,
-            uri = s"$accountsBaseUrl/api/token",
+            uri = tokenUri,
             headers = Seq(
               RawHeader("grant_type", "refresh_token"),
               RawHeader("refresh_token", user.refreshToken),
@@ -196,7 +207,7 @@ trait Commands {
     (for {
       post <- Http().singleRequest(HttpRequest(
         POST,
-        uri = s"$accountsBaseUrl/api/token",
+        uri = tokenUri,
         headers = Seq(
           RawHeader("grant_type", "client_credentials"),
           RawHeader("client_id", srv.clientId),
@@ -226,7 +237,7 @@ trait Commands {
     (for {
       post <- Http().singleRequest(HttpRequest(
         POST,
-        uri = s"$accountsBaseUrl/api/token",
+        uri = tokenUri,
         headers = Seq(
           RawHeader("grant_type", "authorization_code"),
           RawHeader("code", authCode),

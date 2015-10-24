@@ -54,8 +54,4 @@ package object spotify extends Objects {
         }
       }
   }
-
-  implicit class RichString(private val underlying: String) extends AnyVal {
-    def escaped: String = akka.http.scaladsl.model.Uri.Path(underlying).toString
-  }
 }
