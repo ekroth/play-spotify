@@ -49,7 +49,7 @@ trait Commands {
   /** Scopes for user access. */
   object Scope {
     private[spotify] def apply(s: String): Scope = Tag.of[ScopeTag](s)
-    private[spotify] def unwrap(s: Scope): String = Tag.of[ScopeTag].unwrap(s)
+    private[spotify] def unwrap(s: Scope): String = Tag.unwrap(s)
 
     val playlistModifyPrivate: Scope = Scope("playlist-modify-private")
     val playlistModifyPublic:  Scope = Scope("playlist-modify-public")
